@@ -4,6 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from rp_segmentation.nltk_resources import ensure_required_nltk_resources
 from rp_segmentation.segmenters import (
+    get_tokens,
     n_stop_words_segmentation,
     paragraph_segmentation,
     sentence_segmentation,

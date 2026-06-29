@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 from types import MappingProxyType
 from typing import Final
 
 import nltk
 
 from rp_segmentation.exceptions import NLTKResourceError
-
 
 NLTK_RESOURCES: Final[MappingProxyType[str, str]] = MappingProxyType(
     {
@@ -17,7 +16,7 @@ NLTK_RESOURCES: Final[MappingProxyType[str, str]] = MappingProxyType(
 )
 
 
-@lru_cache(maxsize=None)
+@cache
 def ensure_nltk_resource(resource_name: str) -> None:
     """
     Ensures that a required NLTK resource is available.

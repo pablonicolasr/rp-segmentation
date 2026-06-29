@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
+from typing import cast
 
 import regex as re
-
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
 
 from rp_segmentation.exceptions import InvalidSegmentationParameterError
 from rp_segmentation.nltk_resources import ensure_nltk_resource
-
 
 WORD_RE = re.compile(r"\p{L}+")
 
@@ -67,7 +66,7 @@ def _validate_language(language: str) -> str:
     return language.strip().lower()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _get_stopwords(language: str) -> frozenset[str]:
     """
     Loads and caches stopwords for the selected language.
@@ -140,7 +139,7 @@ def get_tokens(
     if not clean_text:
         return []
 
-    tokens = WORD_RE.findall(clean_text.lower())
+    tokens = cast(list[str], WORD_RE.findall(clean_text.lower()))
 
     if not remove_stopwords:
         return tokens
@@ -290,7 +289,10 @@ def paragraph_segmentation(
     >>> segment_paragraphs("First paragraph.\\n\\nSecond paragraph.")
     ['first paragraph', 'second paragraph']
 
-    >>> segment_paragraphs("This is the first paragraph.\\n\\nThis is another one.", remove_stopwords=True)
+    >>> segment_paragraphs(
+        "This is the first paragraph.\\n\\nThis is another one.", 
+        remove_stopwords=True
+    )
     ['first paragraph', 'another one']
     """
     language = _validate_language(language)
@@ -345,6 +347,8 @@ def n_stop_words_segmentation(
 
     """
 
+    language = _validate_language(language)
+
     clean_text = _normalize_text(text)
 
     if not clean_text:
@@ -353,7 +357,7 @@ def n_stop_words_segmentation(
     
     if n <= 0:
         raise InvalidSegmentationParameterError(
-            "El número de palabras de parada debe ser mayor que cero."
+            "The number of stopwords must be greater than zero."
         )
     
     tokens = get_tokens(text)
@@ -362,56 +366,50 @@ def n_stop_words_segmentation(
 
     if n_tokens <= 0:
         raise InvalidSegmentationParameterError(
-            "El número de tokens debe ser mayor que cero."
+            "The number of tokens must be greater than zero."
         )
     
-    stop = set(stopwords.words(language))
+    stop_words = _get_stopwords(language)
 
     stopword_count = sum(
         1
         for token in tokens
-        if token in stop
+        if token in stop_words
     )
 
     if stopword_count / n_tokens < 0.2:
 
         raise InvalidSegmentationParameterError(
-            "El texto no contiene suficientes palabras de parada para segmentar."
+            "The text does not contain enough stopwords to be segmented."
         ) 
 
-    sub_tokens = []
-
-    n_stop_words_grams = []
-
-    i = 0       
+    segments = []
+    current_tokens = []
+    current_stopword_count = 0      
 
     for token in tokens:
 
-        if not remove_stopwords:
+        if not remove_stopwords or token not in stop_words:
 
-            sub_tokens.append(token)
-        
-        else:
+            current_tokens.append(token)
 
-            if token not in stop:
+        if token in stop_words:
 
-                sub_tokens.append(token)
+            current_stopword_count += 1
 
-        if token in stop:
+            if current_stopword_count == n:
 
-            i += 1
+                if current_tokens:
 
-            if i == n:       
+                    segments.append(" ".join(current_tokens))
 
-                n_stop_words_grams.append(" ".join(sub_tokens).strip())
-
-                sub_tokens = []
-
-                i = 0
+                current_tokens = []
+                
+                current_stopword_count = 0
     
-    if sub_tokens:
+    if current_tokens:
 
-        n_stop_words_grams.append(" ".join(sub_tokens).strip())
+        segments.append(" ".join(current_tokens).strip())
             
     
-    return n_stop_words_grams
+    return segments
