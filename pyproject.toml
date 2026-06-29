@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rp-segmentation"
-version = "0.1.0"
+version = "0.1.1"
 description = "A lightweight text segmentation and tokenization library for Python."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -67,10 +67,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pablonicolasr/rp_segmentation"
-Repository = "https://github.com/pablonicolasr/rp_segmentation"
-Issues = "https://github.com/pablonicolasr/rp_segmentation/issues"
-Changelog = "https://github.com/pablonicolasr/rp_segmentation/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/pablonicolasr/rp-segmentation"
+Repository = "https://github.com/pablonicolasr/rp-segmentation"
+Issues = "https://github.com/pablonicolasr/rp-segmentation/issues"
+Changelog = "https://github.com/pablonicolasr/rp-segmentation/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
