@@ -1,45 +1,81 @@
 name: Publish to PyPI
 
+run-name: Publish ${{ github.ref_name }} to PyPI
+
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+concurrency:
+  group: pypi-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE_NAME: rp-segmentation
+  PYTHON_VERSION: "3.10"
 
 jobs:
   build:
-    name: Build distribution
+    name: Build and validate distribution
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine
+        run: python -m pip install --upgrade build twine
 
-      - name: Build package
-        run: |
-          python -m build
+      - name: Clean old distributions
+        run: rm -rf dist build *.egg-info src/*.egg-info
 
-      - name: Check distribution
-        run: |
-          twine check dist/*
+      - name: Build source and wheel distributions
+        run: python -m build --sdist --wheel
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Show generated distributions
+        run: |
+          ls -lah dist
+          python - <<'PY'
+          from pathlib import Path
+
+          files = sorted(Path("dist").glob("*"))
+          if not files:
+              raise SystemExit("No distribution files were generated.")
+
+          print("Generated distributions:")
+          for file in files:
+              print(f"- {file.name} ({file.stat().st_size} bytes)")
+          PY
+
+      - name: Check package metadata
+        run: python -m twine check --strict dist/*
+
+      - name: Upload distribution artifact
+        uses: actions/upload-artifact@v5
         with:
           name: python-package-distributions
           path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
   publish-to-pypi:
-    name: Publish to PyPI
+    name: Publish distribution to PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
 
@@ -48,14 +84,21 @@ jobs:
       url: https://pypi.org/p/rp-segmentation
 
     permissions:
+      contents: read
       id-token: write
 
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
+      - name: Download distribution artifact
+        uses: actions/download-artifact@v6
         with:
           name: python-package-distributions
           path: dist/
 
-      - name: Publish package
+      - name: Verify downloaded distributions
+        run: |
+          ls -lah dist
+          test -n "$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
+
+      - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
