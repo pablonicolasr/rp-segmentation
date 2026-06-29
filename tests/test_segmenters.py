@@ -383,11 +383,14 @@ def test_clean_segment_removes_stopwords(monkeypatch):
 
     text = "Hello, John. How are you?"
 
-    assert segmenters._clean_segment(
-        text,
-        language="english",
-        remove_stopwords=True,
-    ) == "hello john"
+    assert (
+        segmenters._clean_segment(
+            text,
+            language="english",
+            remove_stopwords=True,
+        )
+        == "hello john"
+    )
 
 
 def test_clean_segment_rejects_non_string_input():

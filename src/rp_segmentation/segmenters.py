@@ -146,11 +146,7 @@ def get_tokens(
 
     stop_words = _get_stopwords(language)
 
-    return [
-        token
-        for token in tokens
-        if token not in stop_words
-    ]
+    return [token for token in tokens if token not in stop_words]
 
 
 def _clean_segment(
@@ -290,7 +286,7 @@ def paragraph_segmentation(
     ['first paragraph', 'second paragraph']
 
     >>> segment_paragraphs(
-        "This is the first paragraph.\\n\\nThis is another one.", 
+        "This is the first paragraph.\\n\\nThis is another one.",
         remove_stopwords=True
     )
     ['first paragraph', 'another one']
@@ -316,13 +312,10 @@ def paragraph_segmentation(
         )
     ]
 
-def n_stop_words_segmentation(
-        text: str, 
-        language: str = "english", 
-        n: int = 5,
-        remove_stopwords: bool = False
-) -> list[str]:
 
+def n_stop_words_segmentation(
+    text: str, language: str = "english", n: int = 5, remove_stopwords: bool = False
+) -> list[str]:
     """
     A text is segmented every N stop words.
 
@@ -352,14 +345,13 @@ def n_stop_words_segmentation(
     clean_text = _normalize_text(text)
 
     if not clean_text:
-
         return []
-    
+
     if n <= 0:
         raise InvalidSegmentationParameterError(
             "The number of stopwords must be greater than zero."
         )
-    
+
     tokens = get_tokens(text)
 
     n_tokens = len(tokens)
@@ -368,48 +360,36 @@ def n_stop_words_segmentation(
         raise InvalidSegmentationParameterError(
             "The number of tokens must be greater than zero."
         )
-    
+
     stop_words = _get_stopwords(language)
 
-    stopword_count = sum(
-        1
-        for token in tokens
-        if token in stop_words
-    )
+    stopword_count = sum(1 for token in tokens if token in stop_words)
 
     if stopword_count / n_tokens < 0.2:
-
         raise InvalidSegmentationParameterError(
             "The text does not contain enough stopwords to be segmented."
-        ) 
+        )
 
     segments = []
     current_tokens = []
-    current_stopword_count = 0      
+    current_stopword_count = 0
 
     for token in tokens:
-
         if not remove_stopwords or token not in stop_words:
-
             current_tokens.append(token)
 
         if token in stop_words:
-
             current_stopword_count += 1
 
             if current_stopword_count == n:
-
                 if current_tokens:
-
                     segments.append(" ".join(current_tokens))
 
                 current_tokens = []
-                
-                current_stopword_count = 0
-    
-    if current_tokens:
 
+                current_stopword_count = 0
+
+    if current_tokens:
         segments.append(" ".join(current_tokens).strip())
-            
-    
+
     return segments
