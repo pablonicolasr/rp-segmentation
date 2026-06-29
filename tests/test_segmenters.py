@@ -1,13 +1,40 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
 import pytest
 
 import rp_segmentation.segmenters as segmenters
 from rp_segmentation.exceptions import InvalidSegmentationParameterError
 
 
+def _patch_stopwords(monkeypatch: pytest.MonkeyPatch, words: set[str]) -> None:
+    """
+    Replaces both the internal cached stopword provider and the NLTK stopwords
+    proxy with deterministic in-memory test data.
+
+    This avoids loading real NLTK corpora in CI environments.
+    """
+    words_list = sorted(words)
+    words_set = frozenset(words)
+
+    monkeypatch.setattr(
+        segmenters,
+        "_get_stopwords",
+        lambda language: words_set,
+    )
+
+    monkeypatch.setattr(
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=lambda language: words_list),
+    )
+
+
 @pytest.fixture(autouse=True)
 def clear_stopwords_cache():
     """
-    Prevents cached stopwords from leaking between tests.
+    Prevent cached stopwords from leaking between tests.
     """
     cache_clear = getattr(segmenters._get_stopwords, "cache_clear", None)
 
@@ -98,9 +125,9 @@ def test_get_stopwords_returns_frozenset(monkeypatch):
     )
 
     monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and", "is"],
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=lambda language: ["the", "and", "is"]),
     )
 
     result = segmenters._get_stopwords("english")
@@ -122,7 +149,11 @@ def test_get_stopwords_normalizes_language(monkeypatch):
         received["language"] = language
         return ["the", "and"]
 
-    monkeypatch.setattr(segmenters.stopwords, "words", fake_stopwords)
+    monkeypatch.setattr(
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=fake_stopwords),
+    )
 
     result = segmenters._get_stopwords("  ENGLISH  ")
 
@@ -140,9 +171,9 @@ def test_get_stopwords_ensures_nltk_resource(monkeypatch):
     )
 
     monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and"],
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=lambda language: ["the", "and"]),
     )
 
     segmenters._get_stopwords("english")
@@ -163,7 +194,11 @@ def test_get_stopwords_uses_cache(monkeypatch):
         calls.append(language)
         return ["the", "and"]
 
-    monkeypatch.setattr(segmenters.stopwords, "words", fake_stopwords)
+    monkeypatch.setattr(
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=fake_stopwords),
+    )
 
     first_result = segmenters._get_stopwords("english")
     second_result = segmenters._get_stopwords("english")
@@ -190,7 +225,11 @@ def test_get_stopwords_raises_custom_error_when_language_is_not_available(
     def raise_os_error(language):
         raise OSError("No such file or directory")
 
-    monkeypatch.setattr(segmenters.stopwords, "words", raise_os_error)
+    monkeypatch.setattr(
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=raise_os_error),
+    )
 
     with pytest.raises(
         InvalidSegmentationParameterError,
@@ -293,11 +332,7 @@ def test_get_tokens_rejects_non_string_input():
 
 
 def test_get_tokens_removes_stopwords(monkeypatch):
-    monkeypatch.setattr(
-        segmenters,
-        "_get_stopwords",
-        lambda language: frozenset({"how", "are", "you"}),
-    )
+    _patch_stopwords(monkeypatch, {"how", "are", "you"})
 
     text = "Hello, John. How are you?"
 
@@ -344,11 +379,7 @@ def test_clean_segment_returns_empty_string_for_non_word_segment():
 
 
 def test_clean_segment_removes_stopwords(monkeypatch):
-    monkeypatch.setattr(
-        segmenters,
-        "_get_stopwords",
-        lambda language: frozenset({"how", "are", "you"}),
-    )
+    _patch_stopwords(monkeypatch, {"how", "are", "you"})
 
     text = "Hello, John. How are you?"
 
@@ -484,11 +515,7 @@ def test_sentence_segmentation_removes_stopwords(monkeypatch):
         lambda text, language: ["Hello, John.", "How are you?"],
     )
 
-    monkeypatch.setattr(
-        segmenters,
-        "_get_stopwords",
-        lambda language: frozenset({"how", "are", "you"}),
-    )
+    _patch_stopwords(monkeypatch, {"how", "are", "you"})
 
     text = "Hello, John. How are you?"
 
@@ -550,11 +577,7 @@ def test_paragraph_segmentation_rejects_non_string_text():
 
 
 def test_paragraph_segmentation_removes_stopwords(monkeypatch):
-    monkeypatch.setattr(
-        segmenters,
-        "_get_stopwords",
-        lambda language: frozenset({"this", "is", "the"}),
-    )
+    _patch_stopwords(monkeypatch, {"this", "is", "the"})
 
     text = "This is the first paragraph.\n\nThis is another one."
 
@@ -624,11 +647,7 @@ def test_n_stop_words_segmentation_rejects_text_without_word_tokens():
 
 
 def test_n_stop_words_segmentation_segments_every_n_stopwords(monkeypatch):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and", "is", "of"],
-    )
+    _patch_stopwords(monkeypatch, {"the", "and", "is", "of"})
 
     text = "Alpha the beta and gamma is delta of omega."
 
@@ -644,11 +663,7 @@ def test_n_stop_words_segmentation_segments_every_n_stopwords(monkeypatch):
 
 
 def test_n_stop_words_segmentation_segments_every_single_stopword(monkeypatch):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and"],
-    )
+    _patch_stopwords(monkeypatch, {"the", "and"})
 
     text = "Alpha the beta and gamma."
 
@@ -666,11 +681,7 @@ def test_n_stop_words_segmentation_segments_every_single_stopword(monkeypatch):
 def test_n_stop_words_segmentation_returns_single_segment_when_n_is_not_reached(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and", "is", "of"],
-    )
+    _patch_stopwords(monkeypatch, {"the", "and", "is", "of"})
 
     text = "Alpha the beta and gamma is delta of omega."
 
@@ -684,11 +695,7 @@ def test_n_stop_words_segmentation_returns_single_segment_when_n_is_not_reached(
 
 
 def test_n_stop_words_segmentation_removes_stopwords_from_segments(monkeypatch):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and", "is", "of"],
-    )
+    _patch_stopwords(monkeypatch, {"the", "and", "is", "of"})
 
     text = "Alpha the beta and gamma is delta of omega."
 
@@ -707,11 +714,7 @@ def test_n_stop_words_segmentation_removes_stopwords_from_segments(monkeypatch):
 def test_n_stop_words_segmentation_raises_when_stopword_ratio_is_too_low(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the"],
-    )
+    _patch_stopwords(monkeypatch, {"the"})
 
     text = "Alpha beta gamma delta epsilon the."
 
@@ -729,11 +732,7 @@ def test_n_stop_words_segmentation_raises_when_stopword_ratio_is_too_low(
 def test_n_stop_words_segmentation_accepts_exact_minimum_stopword_ratio(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the"],
-    )
+    _patch_stopwords(monkeypatch, {"the"})
 
     text = "Alpha beta gamma delta the."
 
@@ -746,14 +745,16 @@ def test_n_stop_words_segmentation_accepts_exact_minimum_stopword_ratio(
     ]
 
 
-def test_n_stop_words_segmentation_passes_language_to_stopwords(monkeypatch):
+def test_n_stop_words_segmentation_passes_language_to_stopword_provider(
+    monkeypatch,
+):
     received = {}
 
-    def fake_stopwords(language):
+    def fake_get_stopwords(language):
         received["language"] = language
-        return ["el", "y"]
+        return frozenset({"el", "y"})
 
-    monkeypatch.setattr(segmenters.stopwords, "words", fake_stopwords)
+    monkeypatch.setattr(segmenters, "_get_stopwords", fake_get_stopwords)
 
     text = "Casa el perro y gato."
 
@@ -776,13 +777,8 @@ def test_n_stop_words_segmentation_rejects_non_string_text():
         segmenters.n_stop_words_segmentation(None)
 
 
-
 def test_n_stop_words_segmentation_should_not_return_empty_segments(monkeypatch):
-    monkeypatch.setattr(
-        segmenters.stopwords,
-        "words",
-        lambda language: ["the", "and"],
-    )
+    _patch_stopwords(monkeypatch, {"the", "and"})
 
     text = "the and alpha"
 
@@ -794,12 +790,15 @@ def test_n_stop_words_segmentation_should_not_return_empty_segments(monkeypatch)
     ) == ["alpha"]
 
 
-
 def test_n_stop_words_segmentation_should_wrap_unavailable_language(monkeypatch):
     def raise_os_error(language):
         raise OSError("No such file or directory")
 
-    monkeypatch.setattr(segmenters.stopwords, "words", raise_os_error)
+    monkeypatch.setattr(
+        segmenters,
+        "stopwords",
+        SimpleNamespace(words=raise_os_error),
+    )
 
     with pytest.raises(InvalidSegmentationParameterError):
         segmenters.n_stop_words_segmentation(

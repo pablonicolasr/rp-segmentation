@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from functools import cache
+from functools import lru_cache
 from types import MappingProxyType
 from typing import Final
+from zipfile import BadZipFile
 
 import nltk
 
 from rp_segmentation.exceptions import NLTKResourceError
+
 
 NLTK_RESOURCES: Final[MappingProxyType[str, str]] = MappingProxyType(
     {
@@ -16,13 +18,14 @@ NLTK_RESOURCES: Final[MappingProxyType[str, str]] = MappingProxyType(
 )
 
 
-@cache
+@lru_cache(maxsize=None)
 def ensure_nltk_resource(resource_name: str) -> None:
     """
     Ensures that a required NLTK resource is available.
 
     If the resource is missing, the function attempts to download it
-    automatically.
+    automatically. If the resource is corrupted, the function raises a
+    package-specific error with a clear recovery message.
 
     Parameters
     ----------
@@ -32,8 +35,8 @@ def ensure_nltk_resource(resource_name: str) -> None:
     Raises
     ------
     NLTKResourceError
-        If the resource is not supported by the package or cannot be found
-        after attempting to download it.
+        If the resource is unsupported, missing, corrupted, or cannot be
+        downloaded.
     """
     resource_path = NLTK_RESOURCES.get(resource_name)
 
@@ -52,9 +55,23 @@ def ensure_nltk_resource(resource_name: str) -> None:
     except LookupError:
         pass
 
+    except BadZipFile as exc:
+        raise NLTKResourceError(
+            f"The NLTK resource appears to be corrupted: {resource_name}. "
+            f"Try deleting the local NLTK resource and running: "
+            f"python -m nltk.downloader {resource_name}"
+        ) from exc
+
     try:
         nltk.download(resource_name, quiet=True)
         nltk.data.find(resource_path)
+
+    except BadZipFile as exc:
+        raise NLTKResourceError(
+            f"The NLTK resource appears to be corrupted after download: "
+            f"{resource_name}. Try deleting the local NLTK resource and running: "
+            f"python -m nltk.downloader {resource_name}"
+        ) from exc
 
     except Exception as exc:
         raise NLTKResourceError(
